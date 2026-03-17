@@ -266,7 +266,7 @@ async function openAnalysis(article) {
     const json = JSON.parse(raw.replace(/```json|```/g, '').trim());
     renderAnalysis(content, article, json);
   } catch (err) {
-    content.innerHTML = `<div class="error-state"><strong>AI分析に失敗しました</strong><br>APIキーを確認するか、しばらく後に再試行してください。<br><small>${err.message}</small></div>`;
+    content.innerHTML = buildErrorHTML(err.message);
   }
 }
 
@@ -305,6 +305,57 @@ function renderAnalysis(container, article, data) {
     <div class="analysis-section">
       <div class="analysis-section-label"><span class="num">⑥</span> 将来予測（2〜3年後）</div>
       <div class="future-box">🔮 ${data.future_prediction || ''}</div>
+    </div>`;
+}
+
+function buildErrorHTML(msg) {
+  let title = 'AI分析に失敗しました';
+  let detail = msg;
+  let fix = '';
+
+  if (msg.includes('User not found') || msg.includes('401') || msg.includes('No auth')) {
+    title = '🔐 認証エラー：APIキーが無効です';
+    detail = 'OpenRouterのAPIキーが正しく認識されていません。';
+    fix = `
+      <div class="error-fix">
+        <strong>よくある原因と解決方法：</strong>
+        <ol>
+          <li>OpenRouterの <a href="https://openrouter.ai/settings/privacy" target="_blank">プライバシー設定</a> で<br>
+          「<b>Allow training on my prompts</b>」と「<b>Allow logging of my prompts</b>」を<b>両方オン</b>にしてください（無料モデルの必須条件）</li>
+          <li>APIキーをコピーし直して再設定してください（⚙ 設定ボタン）</li>
+          <li>OpenRouterで新しいAPIキーを発行し直すと解決することがあります</li>
+        </ol>
+      </div>`;
+  } else if (msg.includes('No endpoints') || msg.includes('data policy') || msg.includes('404')) {
+    title = '⚙️ プライバシー設定が必要です';
+    detail = '無料モデルを使うにはOpenRouterのプライバシー設定が必要です。';
+    fix = `
+      <div class="error-fix">
+        <strong>解決手順：</strong>
+        <ol>
+          <li><a href="https://openrouter.ai/settings/privacy" target="_blank">openrouter.ai/settings/privacy</a> を開く</li>
+          <li>「<b>Allow training on my prompts</b>」をオン</li>
+          <li>「<b>Allow logging of my prompts</b>」をオン</li>
+          <li>保存してからアプリに戻って再試行してください</li>
+        </ol>
+      </div>`;
+  } else if (msg.includes('429') || msg.includes('rate limit') || msg.includes('レート制限')) {
+    title = '⏳ リクエスト制限中です';
+    detail = '無料プランの1日の上限（50回）に達しました。';
+    fix = `<div class="error-fix">翌日（UTC 0時リセット）に再試行してください。<br>または <a href="https://openrouter.ai/credits" target="_blank">OpenRouterでクレジットを追加</a>すると1日1000回に増えます（最小$10）。</div>`;
+  }
+
+  return `
+    <div class="error-state">
+      <strong>${title}</strong><br>
+      <span style="font-size:13px;color:#666;margin-top:6px;display:block;">${detail}</span>
+      ${fix}
+      <div style="margin-top:14px;">
+        <button onclick="document.getElementById('analysisModal').classList.add('hidden'); document.getElementById('apiModal').classList.remove('hidden');"
+          style="background:#1d4ed8;color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+          ⚙ 設定を開き直す
+        </button>
+      </div>
     </div>`;
 }
 
