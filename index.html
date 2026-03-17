@@ -11,72 +11,11 @@
 </head>
 <body>
 
-  <!-- ===== API KEY MODAL ===== -->
-  <div id="apiModal" class="modal-overlay hidden">
-    <div class="modal-box api-modal-box">
-
-      <div class="api-modal-header">
-        <div class="api-modal-icon">🔑</div>
-        <h2 class="api-modal-title">APIキーを設定</h2>
-        <p class="api-modal-desc">すべて<strong class="free-label">完全無料・クレカ不要</strong>で取得できます。<br>キーはこのブラウザにのみ保存され、外部には一切送信されません。</p>
-      </div>
-
-      <!-- ① OpenRouter -->
-      <div class="api-card required-card">
-        <div class="api-card-header">
-          <div class="api-card-left">
-            <span class="api-badge badge-required">必須</span>
-            <span class="api-card-name">🤖 OpenRouter API <span class="api-card-sub">（AI分析エンジン）</span></span>
-          </div>
-          <a class="btn-get-api" href="https://openrouter.ai/keys" target="_blank" rel="noopener">無料で取得 →</a>
-        </div>
-        <div class="api-steps">
-          <div class="api-step"><span class="step-num">1</span><span>openrouter.ai でGoogleアカウントでサインアップ（無料・クレカ不要）</span></div>
-          <div class="api-step"><span class="step-num">2</span><span>「Keys」→「Create Key」でAPIキーを発行（<code>sk-or-v1-...</code>形式）</span></div>
-          <div class="api-step step-important"><span class="step-num step-num-warn">!</span><span><strong>必須：</strong> <a href="https://openrouter.ai/settings/privacy" target="_blank" rel="noopener">プライバシー設定ページ</a> を開き、「<strong>Allow training on my prompts</strong>」と「<strong>Allow logging of my prompts</strong>」を<strong>両方オン</strong>にする（無料モデルの利用条件）</span></div>
-          <div class="api-step"><span class="step-num">3</span><span>上記設定後、APIキーを入力して保存してください</span></div>
-        </div>
-        <div class="api-input-row">
-          <input type="password" id="openrouterKeyInput" placeholder="sk-or-v1-..." />
-          <button class="btn-toggle-eye" data-target="openrouterKeyInput" title="表示/非表示">👁</button>
-        </div>
-      </div>
-
-      <!-- ② GNews -->
-      <div class="api-card optional-card">
-        <div class="api-card-header">
-          <div class="api-card-left">
-            <span class="api-badge badge-optional">任意</span>
-            <span class="api-card-name">📰 GNews API <span class="api-card-sub">（ニュース取得）</span></span>
-          </div>
-          <a class="btn-get-api btn-get-secondary" href="https://gnews.io/" target="_blank" rel="noopener">無料で取得 →</a>
-        </div>
-        <div class="api-steps">
-          <div class="api-step"><span class="step-num">1</span><span>gnews.io でメールアドレスのみで登録（クレカ不要）</span></div>
-          <div class="api-step"><span class="step-num">2</span><span>ダッシュボードのAPIキーをコピー</span></div>
-          <div class="api-step"><span class="step-num">3</span><span>無料プラン：1日100件まで日本語ニュース取得可能</span></div>
-        </div>
-        <div class="api-card-note">⚠ 未入力でもデモニュースで全AI機能が使えます</div>
-        <div class="api-input-row">
-          <input type="text" id="newsKeyInput" placeholder="GNews APIキー（省略可）" />
-        </div>
-      </div>
-
-      <button class="btn-primary" id="saveApiBtn">✓ 保存してアプリを開始する</button>
-      <p class="api-security-note">🔒 キーはブラウザのlocalStorageのみに保存。サーバーへの送信はありません。</p>
-    </div>
-  </div>
-
   <!-- ===== ANALYSIS MODAL ===== -->
   <div id="analysisModal" class="modal-overlay hidden">
     <div class="modal-box analysis-modal-box">
       <button class="modal-close" id="closeAnalysis">✕</button>
-      <div id="analysisContent">
-        <div class="analysis-loading">
-          <div class="spinner"></div>
-          <p>AI分析中... しばらくお待ちください</p>
-        </div>
-      </div>
+      <div id="analysisContent"></div>
     </div>
   </div>
 
@@ -89,7 +28,7 @@
         <span class="header-subtitle">営業インテリジェンスツール</span>
       </div>
     </div>
-    <div class="header-center" id="todayTopics">
+    <div class="header-center">
       <div class="today-label">📌 今日の営業ネタ</div>
       <div class="today-chips" id="topicChips">
         <span class="chip skeleton-chip"></span>
@@ -99,21 +38,28 @@
     </div>
     <div class="header-right">
       <div class="header-date" id="headerDate"></div>
-      <button class="btn-settings" id="settingsBtn">⚙ 設定</button>
+      <button class="btn-refresh-all" id="refreshAll" title="全体更新">↻ 更新</button>
     </div>
   </header>
 
   <!-- ===== MAIN ===== -->
   <main class="main-layout">
 
+    <!-- LEFT: AI PICKUP -->
     <section class="panel panel-left">
       <div class="panel-header">
         <div class="panel-title-row">
-          <span class="panel-icon">🤖</span>
-          <h2 class="panel-title">AI ピックアップ</h2>
-          <span class="panel-badge">自動選定</span>
+          <span class="panel-icon">📡</span>
+          <h2 class="panel-title">注目ニュース</h2>
+          <span class="panel-badge">自動収集</span>
         </div>
-        <button class="btn-refresh" id="refreshAiNews" title="更新">↻</button>
+        <button class="btn-refresh" id="refreshLeft" title="更新">↻</button>
+      </div>
+      <div class="source-tabs" id="sourceTabs">
+        <button class="stab active" data-src="it">IT全般</button>
+        <button class="stab" data-src="finance">金融・生保</button>
+        <button class="stab" data-src="mfg">製造・電力</button>
+        <button class="stab" data-src="dx">DX・AI</button>
       </div>
       <div class="news-grid" id="aiNewsGrid">
         <div class="card skeleton-card"></div>
@@ -122,6 +68,7 @@
       </div>
     </section>
 
+    <!-- RIGHT: SEARCH -->
     <section class="panel panel-right">
       <div class="panel-header">
         <div class="panel-title-row">
@@ -140,11 +87,12 @@
         <button class="quick-tag" data-q="SIer 再編">SIer再編</button>
         <button class="quick-tag" data-q="製造業 DX">製造業DX</button>
         <button class="quick-tag" data-q="電力 システム">電力システム</button>
+        <button class="quick-tag" data-q="クラウド">クラウド</button>
       </div>
       <div class="news-grid" id="searchNewsGrid">
         <div class="empty-state">
           <span class="empty-icon">🗞️</span>
-          <p>キーワードを入力してニュースを検索してください</p>
+          <p>キーワードを入力して<br>ニュースを検索してください</p>
         </div>
       </div>
     </section>

@@ -1,361 +1,387 @@
-// ========================================
+// ================================================
 // SES Intelligence Tool — app.js
-// AI: OpenRouter (完全無料・クレカ不要)
-// News: GNews API (無料100件/日)
-// ========================================
+// APIキー不要・完全無料版
+// ニュース: RSS → rss2json.com (無料・CORS対応)
+// AI分析:  ルールベースエンジン（キーワード解析）
+// ================================================
 
-const STATE = {
-  openrouterKey: '',
-  newsKey: '',
+// ===== RSSソース定義 =====
+const RSS_SOURCES = {
+  it: [
+    { name:'ITmedia NEWS',   url:'https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml',    emoji:'💻' },
+    { name:'ZDNet Japan',    url:'https://japan.zdnet.com/index.rdf',                     emoji:'🖥' },
+    { name:'@IT',            url:'https://rss.itmedia.co.jp/rss/2.0/ait.xml',             emoji:'⚙' },
+    { name:'TechCrunch JP',  url:'https://jp.techcrunch.com/feed/',                       emoji:'🚀' },
+  ],
+  finance: [
+    { name:'FinTech Journal',url:'https://www.financialtechnology.co.jp/feed/',            emoji:'🏦' },
+    { name:'ITmedia FinTech',url:'https://rss.itmedia.co.jp/rss/2.0/pcuser.xml',          emoji:'💳' },
+    { name:'日経 金融',      url:'https://www.nikkei.com/rss/finance.rdf',                emoji:'📈' },
+  ],
+  mfg: [
+    { name:'MONOist',        url:'https://rss.itmedia.co.jp/rss/2.0/monoist.xml',         emoji:'🏭' },
+    { name:'スマートジャパン',url:'https://rss.itmedia.co.jp/rss/2.0/smartjapan.xml',     emoji:'⚡' },
+    { name:'EE Times JP',    url:'https://eetimes.itmedia.co.jp/index.rdf',               emoji:'🔌' },
+  ],
+  dx: [
+    { name:'EnterpriseZine', url:'https://enterprisezine.jp/rss/20',                      emoji:'🔄' },
+    { name:'IT Leaders',     url:'https://it.impressbm.co.jp/rss/20',                     emoji:'📊' },
+    { name:'BCN+R',          url:'https://www.bcnretail.com/rss/news.xml',                emoji:'🧩' },
+  ],
 };
 
-// ===== デモニュースデータ（GNews APIなし時のフォールバック） =====
-const DEMO_NEWS = [
-  {
-    title: "三菱UFJ銀行、生成AI活用で融資審査を自動化へ — 2025年度中に本格導入",
-    description: "三菱UFJ銀行は生成AIを活用した融資審査システムの本格導入を発表。従来比で審査時間を70%短縮できるとし、中小企業向け融資の拡大を見込む。システム開発にはNTTデータと富士通が参画する見通し。",
-    url: "https://example.com/news/1", urlToImage: null,
-    source: { name: "日経新聞" }, publishedAt: new Date().toISOString(),
-    category: "金融 / AI", emoji: "🏦"
-  },
-  {
-    title: "経済産業省、DX推進指標を改定 — SIerへの影響が拡大",
-    description: "経済産業省はDX推進指標を全面改定し、企業のDX成熟度評価方法を刷新する。特にSIerの役割を「開発ベンダー」から「変革パートナー」へ位置づけることを推奨し、ビジネスモデル転換が加速する見込みだ。",
-    url: "https://example.com/news/2", urlToImage: null,
-    source: { name: "IT media" }, publishedAt: new Date(Date.now() - 3600000).toISOString(),
-    category: "DX / 政策", emoji: "📊"
-  },
-  {
-    title: "日本生命、基幹システム刷新プロジェクトに約500億円投資 — クラウド移行を加速",
-    description: "日本生命保険は老朽化した基幹システムの全面刷新を決定。AWS/Azureへのクラウド移行を中心に約500億円を投資し、2027年度までの完了を目指す。NTTデータ、日立製作所などが受注競争に参入している。",
-    url: "https://example.com/news/3", urlToImage: null,
-    source: { name: "日本経済新聞" }, publishedAt: new Date(Date.now() - 7200000).toISOString(),
-    category: "生保 / クラウド", emoji: "🏢"
-  },
-  {
-    title: "GitHub Copilot採用企業が国内で急増 — エンジニア生産性40%向上の報告も",
-    description: "GitHub Copilotの国内採用企業が急増し、大手SIerを中心に開発生産性の向上報告が相次いでいる。一方でAI活用スキルを持つエンジニアの不足が深刻化しており、人材獲得競争が激化している。",
-    url: "https://example.com/news/4", urlToImage: null,
-    source: { name: "TechCrunch Japan" }, publishedAt: new Date(Date.now() - 10800000).toISOString(),
-    category: "AI / 開発", emoji: "💻"
-  },
-  {
-    title: "東京電力HD、スマートグリッド整備にAI活用 — 電力需給予測システムを刷新",
-    description: "東京電力ホールディングスは電力需給予測にAIを活用した新システムの導入を開始。再生可能エネルギーの出力変動への対応力を高め、2025年度中に全エリアへの展開を予定。システム開発は日立製作所が担当する。",
-    url: "https://example.com/news/5", urlToImage: null,
-    source: { name: "電気新聞" }, publishedAt: new Date(Date.now() - 14400000).toISOString(),
-    category: "電力 / AI", emoji: "⚡"
-  },
-  {
-    title: "トヨタ自動車、SDV開発加速でソフトウェアエンジニアを5000人採用計画",
-    description: "トヨタ自動車はソフトウェア定義型自動車(SDV)の開発加速に向け、2026年までにソフトウェアエンジニアを5000人採用する計画を発表。SES企業を含む外部リソースの活用も検討しており、自動車×ITの人材需要が急拡大する見通し。",
-    url: "https://example.com/news/6", urlToImage: null,
-    source: { name: "自動車新聞" }, publishedAt: new Date(Date.now() - 18000000).toISOString(),
-    category: "自動車 / DX", emoji: "🚗"
-  },
-];
+// rss2json.com — 無料・CORS対応・APIキー不要（1日150件まで）
+const RSS2JSON = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
-// ===== INIT =====
-document.addEventListener('DOMContentLoaded', () => {
-  setDate();
-  loadKeys();
+// ===== SES向けキーワード分析エンジン =====
+const KEYWORD_DB = {
+  finance:    ['銀行','金融','証券','保険','生命保険','損保','フィンテック','FinTech','SWIFT','決済','送金','融資','ローン','資産','投資','株','為替','信託','信金','信組','メガバンク','みずほ','三菱UFJ','三井住友','りそな','第一生命','日本生命','住友生命','明治安田','東京海上','損保ジャパン'],
+  mfg:        ['製造','工場','生産','自動車','トヨタ','ホンダ','日産','電力','東電','関電','中電','東北電','九電','ガス','東ガス','大ガス','鉄鋼','化学','素材','半導体','電機','パナソニック','ソニー','日立','東芝','富士通','NEC','三菱電機','川崎重工','IHI','重工'],
+  dx:         ['DX','デジタルトランスフォーメーション','AI','人工知能','機械学習','ディープラーニング','ChatGPT','生成AI','クラウド','AWS','Azure','GCP','IoT','ビッグデータ','データ分析','RPA','自動化','デジタル化','システム刷新','モダナイゼーション','マイグレーション'],
+  ses:        ['SIer','SES','システム開発','エンジニア','SE','ITエンジニア','アウトソーシング','派遣','受託','オフショア','アジャイル','DevOps','スクラム','PMO','プロジェクトマネジメント','要件定義','保守運用'],
+  risk:       ['サイバー','セキュリティ','情報漏洩','ランサムウェア','不正アクセス','脆弱性','インシデント','コンプライアンス','規制','法改正','GDPR','個人情報'],
+  infra:      ['クラウド','サーバー','ネットワーク','インフラ','データセンター','マルチクラウド','ハイブリッドクラウド','コンテナ','Kubernetes','Docker','マイクロサービス'],
+};
 
-  if (!STATE.openrouterKey) {
-    showApiModal();
-  } else {
-    initApp();
+// スコアリング：記事タイトル＋本文から業界関連度を数値化
+function scoreArticle(text) {
+  const t = text.toLowerCase();
+  const scores = {};
+  for (const [cat, words] of Object.entries(KEYWORD_DB)) {
+    scores[cat] = words.filter(w => t.includes(w.toLowerCase())).length;
   }
-
-  // Listeners
-  document.getElementById('saveApiBtn').addEventListener('click', saveKeys);
-  document.getElementById('settingsBtn').addEventListener('click', showApiModal);
-  document.getElementById('searchBtn').addEventListener('click', handleSearch);
-  document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
-  document.getElementById('refreshAiNews').addEventListener('click', loadAiPickup);
-  document.getElementById('closeAnalysis').addEventListener('click', closeAnalysisModal);
-  document.getElementById('analysisModal').addEventListener('click', e => {
-    if (e.target === document.getElementById('analysisModal')) closeAnalysisModal();
-  });
-  document.querySelectorAll('.quick-tag').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.getElementById('searchInput').value = btn.dataset.q;
-      handleSearch();
-    });
-  });
-
-  // 👁 目玉ボタン
-  document.querySelectorAll('.btn-toggle-eye').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = document.getElementById(btn.dataset.target);
-      input.type = input.type === 'password' ? 'text' : 'password';
-    });
-  });
-});
-
-function setDate() {
-  const el = document.getElementById('headerDate');
-  el.textContent = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+  return scores;
 }
 
-function loadKeys() {
-  STATE.openrouterKey = localStorage.getItem('ses_openrouter_key') || '';
-  STATE.newsKey       = localStorage.getItem('ses_news_key') || '';
-  if (STATE.openrouterKey) document.getElementById('openrouterKeyInput').value = STATE.openrouterKey;
-  if (STATE.newsKey)       document.getElementById('newsKeyInput').value = STATE.newsKey;
+// タグ生成
+function getTags(scores) {
+  const map = { finance:'金融・生保', mfg:'製造・電力', dx:'DX・AI', ses:'SIer・SES', risk:'セキュリティ', infra:'インフラ' };
+  return Object.entries(scores)
+    .filter(([,v]) => v > 0)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0,3)
+    .map(([k]) => map[k] || k);
 }
 
-function saveKeys() {
-  const ok = document.getElementById('openrouterKeyInput').value.trim();
-  const nk = document.getElementById('newsKeyInput').value.trim();
-  if (!ok) { alert('OpenRouter APIキーを入力してください'); return; }
-  STATE.openrouterKey = ok;
-  STATE.newsKey = nk;
-  localStorage.setItem('ses_openrouter_key', ok);
-  if (nk) localStorage.setItem('ses_news_key', nk);
-  document.getElementById('apiModal').classList.add('hidden');
-  initApp();
+// ===== ルールベースAI分析エンジン =====
+function generateAnalysis(article) {
+  const text   = (article.title + ' ' + article.description).replace(/<[^>]+>/g,'');
+  const scores = scoreArticle(text);
+  const title  = article.title || '';
+
+  // ──① 要約──
+  const summary = buildSummary(text, title);
+
+  // ──② 業界への影響──
+  const industryImpacts = buildIndustryImpacts(text, scores);
+
+  // ──③ IT業界への影響──
+  const itImpact = buildItImpact(text, scores);
+
+  // ──④ SES業界への影響──
+  const sesImpact = buildSesImpact(text, scores);
+
+  // ──⑤ 営業トーク例──
+  const salesTalks = buildSalesTalks(text, scores, title);
+
+  // ──⑥ 将来予測──
+  const futurePrediction = buildFuture(text, scores);
+
+  return { summary, industryImpacts, itImpact, sesImpact, salesTalks, futurePrediction };
 }
 
-function showApiModal() {
-  document.getElementById('apiModal').classList.remove('hidden');
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function buildSummary(text, title) {
+  const hasDX    = /DX|デジタル|AI|人工知能|クラウド/.test(text);
+  const hasInvest= /投資|億円|整備|刷新|構築|導入|採用/.test(text);
+  const hasEngineer = /エンジニア|開発者|SE|人材/.test(text);
+
+  let s = `このニュースは、${title.slice(0,30)}に関する動向を伝えています。`;
+  if (hasDX)     s += '特にデジタル技術・AI活用が注目される内容で、業界全体のDX推進に関係しています。';
+  if (hasInvest) s += 'システム投資・整備への動きが含まれており、ITベンダーへの需要拡大が見込まれます。';
+  if (hasEngineer) s += 'エンジニア・人材に関する話題も含まれ、SES業界の案件動向に直結します。';
+  return s;
 }
 
-async function initApp() {
-  loadAiPickup();
-  generateTodayTopics();
+function buildIndustryImpacts(text, scores) {
+  const industries = [
+    {
+      name: '金融・銀行',
+      score: scores.finance,
+      high: 'DX投資が活発化しており、基幹システム刷新・クラウド移行案件の増加が見込まれます。特にAPI連携やセキュリティ強化への需要が高まっています。',
+      mid:  'フィンテックの波及により、既存業務のデジタル化ニーズが顕在化しつつあります。',
+      low:  '直接的な影響は限定的ですが、業界横断的なDX促進の流れの一部です。',
+    },
+    {
+      name: '生命保険・損保',
+      score: scores.finance,
+      high: '契約管理・査定システムの刷新ニーズが高く、クラウド移行プロジェクトが継続的に発生しています。AI活用による業務効率化投資も加速中です。',
+      mid:  'デジタル保険商品への対応やモバイルアプリ開発の需要が出てきています。',
+      low:  '中長期的に規制対応・コスト削減のためのIT投資が見込まれます。',
+    },
+    {
+      name: '製造・自動車',
+      score: scores.mfg,
+      high: 'スマートファクトリー・IoT化への投資が加速しており、MES・ERPの刷新案件が増加しています。SDV（ソフトウェア定義型自動車）関連の開発需要も急拡大中です。',
+      mid:  'サプライチェーン可視化やEDI刷新へのニーズが高まっています。',
+      low:  '省エネ・環境対応のためのシステム整備が中長期的に続く見込みです。',
+    },
+    {
+      name: '電力・ガス',
+      score: scores.mfg,
+      high: '電力自由化後の競争激化により、スマートグリッド・需給管理システムへの投資が拡大しています。老朽化インフラの刷新案件が相次いで発生しています。',
+      mid:  '再生可能エネルギー対応のための制御システム改修ニーズがあります。',
+      low:  '規制対応・DX化の流れで段階的なIT投資が続く見込みです。',
+    },
+  ];
+
+  return industries.map(ind => ({
+    name: ind.name,
+    impact: ind.score >= 2 ? ind.high : ind.score === 1 ? ind.mid : ind.low,
+    level: ind.score >= 2 ? 'high' : ind.score === 1 ? 'mid' : 'low',
+  }));
 }
 
-// ===== NEWS FETCH =====
-async function fetchNews(query) {
-  if (!STATE.newsKey) {
-    const q = query.toLowerCase();
-    const filtered = DEMO_NEWS.filter(n =>
-      !query || n.title.toLowerCase().includes(q) ||
-      n.description.toLowerCase().includes(q) || n.category.toLowerCase().includes(q)
-    );
-    return (filtered.length ? filtered : DEMO_NEWS).slice(0, 6);
+function buildItImpact(text, scores) {
+  const hasDX    = /DX|デジタル/.test(text);
+  const hasAI    = /AI|人工知能|機械学習|生成AI|ChatGPT/.test(text);
+  const hasCloud = /クラウド|AWS|Azure|GCP/.test(text);
+  const hasInfra = /インフラ|サーバー|ネットワーク|データセンター/.test(text);
+  const hasSec   = /セキュリティ|サイバー|不正|漏洩/.test(text);
+
+  const parts = [];
+  if (hasAI)    parts.push('AI・機械学習の実装案件が増加しており、AI活用スキルを持つエンジニアの需要が高まっています。');
+  if (hasCloud) parts.push('クラウド移行・マルチクラウド管理の案件が継続的に発生しており、クラウドアーキテクト・エンジニアへの需要が旺盛です。');
+  if (hasDX)    parts.push('業務システムのDX化・モダナイゼーション需要が加速しており、レガシーシステム刷新プロジェクトが各業界で本格化しています。');
+  if (hasSec)   parts.push('セキュリティ強化・ゼロトラスト導入の需要が高まり、セキュリティエンジニアの引き合いが増えています。');
+  if (hasInfra) parts.push('インフラ刷新・クラウドネイティブ化の案件が継続発生しており、インフラエンジニアの需要が底堅く推移しています。');
+
+  if (parts.length === 0) {
+    parts.push('IT業界全体のデジタル化投資の流れの中で、システム開発・運用保守の需要は引き続き堅調です。業界横断的なDX促進の恩恵を受ける形でIT案件が増加しています。');
   }
+  return parts.join('また、');
+}
+
+function buildSesImpact(text, scores) {
+  const totalScore = Object.values(scores).reduce((a,b)=>a+b,0);
+  const hasAI    = /AI|人工知能|機械学習|生成AI/.test(text);
+  const hasCloud = /クラウド|AWS|Azure/.test(text);
+  const hasRefresh = /刷新|リプレイス|移行|構築|再構築|更新/.test(text);
+  const hasEngineer = /エンジニア|SE|技術者|人材不足|採用/.test(text);
+
+  let s = '';
+  if (hasRefresh) s += '【案件増加】基幹システム刷新・クラウド移行プロジェクトが増加しており、SES企業への引き合いが高まっています。設計〜テスト工程を含む中長期案件が期待できます。';
+  if (hasAI)      s += '【AI導入支援】AI・機械学習の実装・運用保守案件が新たに生まれており、AI活用スキルを持つエンジニアの単価上昇と需要増が見込まれます。';
+  if (hasCloud)   s += '【クラウド案件】クラウドへの移行・最適化案件が継続発生しています。AWS/Azure認定エンジニアの需要が特に高く、高単価案件の獲得チャンスです。';
+  if (hasEngineer)s += '【人材需要】技術者不足が深刻化しており、SES企業へのアウトソーシング需要が拡大しています。顧客との長期パートナーシップ構築の好機です。';
+
+  if (!s) s = '【全体傾向】業界全体のDX化・IT投資拡大の流れの中で、SES企業への案件依頼は引き続き堅調に推移しています。保守運用からDX推進支援へのシフトを意識した営業戦略が有効です。';
+  return s;
+}
+
+function buildSalesTalks(text, scores, title) {
+  const keyword = title.slice(0, 20);
+  const hasDX    = /DX|デジタル/.test(text);
+  const hasAI    = /AI|人工知能|生成AI/.test(text);
+  const hasCloud = /クラウド|AWS|Azure/.test(text);
+  const hasInvest= /億円|投資|刷新/.test(text);
+
+  const pool = [
+    `「最近、${keyword}の話題が業界でよく出ていますね。御社でも同様のご検討はありますか？」`,
+    `「今まさにIT投資が活発な時期で、${hasDX?'DX推進':'システム刷新'}の引き合いが増えています。何かお困りの点はありますか？」`,
+    hasAI    ? `「生成AIの活用、御社でも検討されていますか？最近、私どもでも${pick(['PoC支援','実装案件','活用研修'])}のご相談が増えてきまして」` : null,
+    hasCloud ? `「クラウド移行の件ですが、エンジニア確保でお困りの企業様が最近多くて。御社の状況はいかがですか？」` : null,
+    hasInvest? `「業界全体でIT投資が加速していますね。人手の確保だけでなく、技術力のある会社を探しているとよく聞きます」` : null,
+    `「${pick(['金融','製造','電力','生保'])}系のお客様から最近よくご相談いただくのですが、御社もこのあたりの業界への展開はお考えですか？」`,
+    `「エンジニア不足が続いていますが、御社の採用状況はいかがですか？もし補強が必要でしたらご相談ください」`,
+  ].filter(Boolean);
+
+  // シャッフルして3つ選ぶ
+  const shuffled = pool.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3);
+}
+
+function buildFuture(text, scores) {
+  const hasAI    = /AI|人工知能|生成AI/.test(text);
+  const hasCloud = /クラウド|AWS|Azure/.test(text);
+  const hasDX    = /DX|デジタル/.test(text);
+  const hasMfg   = scores.mfg >= 2;
+  const hasFin   = scores.finance >= 2;
+
+  const parts = [];
+  if (hasAI)  parts.push('今後2〜3年でAI活用は「検討フェーズ」から「実装・運用フェーズ」に移行し、AI導入後の保守・改善を担うエンジニア需要が爆発的に拡大するとみられます。');
+  if (hasCloud) parts.push('クラウドネイティブ化・マルチクラウド管理の複雑化により、専門スキルを持つインフラエンジニアの単価上昇と長期案件化が進む見通しです。');
+  if (hasDX)  parts.push('DX推進の加速によりレガシーシステムの刷新需要が高まり続けており、2〜3年は大型リプレイスプロジェクトが各業界で相次ぐでしょう。SIer・SES企業にとっては大きな商機です。');
+  if (hasFin) parts.push('金融・生保業界では規制対応とDXの両立が求められ続けるため、高度なセキュリティ要件を満たせるエンジニアへの引き合いが高水準で推移する見込みです。');
+  if (hasMfg) parts.push('製造・電力業界のスマート化投資は今後も継続的に行われ、OTとITを跨ぐ複合スキルを持つエンジニアが希少価値を持つ存在になるでしょう。');
+
+  if (parts.length === 0) {
+    parts.push('業界全体のIT化・DX化投資は今後も継続的に拡大する見込みで、SES業界にとっては中長期的に追い風の環境が続くでしょう。特に上流工程（要件定義・設計）を担える人材の希少性がさらに高まると予想されます。');
+  }
+  return parts.join(' ');
+}
+
+// ===== RSS取得 =====
+async function fetchRSS(rssUrl) {
   try {
-    // GNews API — CORS対応・無料・クレカ不要
-    const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=ja&country=jp&max=10&apikey=${STATE.newsKey}`;
+    const url = `${RSS2JSON}${encodeURIComponent(rssUrl)}&count=10`;
     const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
-    if (!data.articles?.length) return DEMO_NEWS.slice(0, 4);
-    return data.articles.map(a => ({
-      title: a.title, description: a.description, url: a.url,
-      urlToImage: a.image, source: { name: a.source?.name || 'GNews' },
-      publishedAt: a.publishedAt,
-    }));
-  } catch {
-    return DEMO_NEWS.slice(0, 4);
+    if (data.status !== 'ok') throw new Error(data.message || 'RSS fetch error');
+    return data.items || [];
+  } catch (e) {
+    console.warn('RSS fetch failed:', rssUrl, e.message);
+    return [];
   }
 }
 
-// ===== AI PICKUP =====
-async function loadAiPickup() {
-  const grid = document.getElementById('aiNewsGrid');
-  grid.innerHTML = '<div class="card skeleton-card"></div><div class="card skeleton-card"></div><div class="card skeleton-card"></div>';
-  const queries = ['IT DX AI 2025', '生保 金融 システム', '製造業 電力 デジタル'];
-  const q = queries[Math.floor(Math.random() * queries.length)];
-  const articles = STATE.newsKey ? await fetchNews(q) : DEMO_NEWS;
-  grid.innerHTML = '';
-  articles.slice(0, 6).forEach((a, i) => grid.appendChild(createCard(a, true, i)));
+async function fetchTabNews(tabKey) {
+  const sources = RSS_SOURCES[tabKey] || RSS_SOURCES.it;
+  // 複数ソースを並列取得して結合
+  const results = await Promise.all(
+    sources.map(async src => {
+      const items = await fetchRSS(src.url);
+      return items.map(item => ({
+        title:       item.title || '',
+        description: (item.description || item.content || '').replace(/<[^>]+>/g,'').slice(0,160),
+        url:         item.link || item.url || '#',
+        urlToImage:  item.enclosure?.link || item.thumbnail || null,
+        source:      { name: src.name },
+        publishedAt: item.pubDate || new Date().toISOString(),
+        emoji:       src.emoji,
+      }));
+    })
+  );
+  const all = results.flat();
+  // SES関連スコアが高い順に並べ替えてから返す
+  return all
+    .filter(a => a.title.trim())
+    .map(a => ({ ...a, _score: Object.values(scoreArticle(a.title + ' ' + a.description)).reduce((s,v)=>s+v,0) }))
+    .sort((a,b) => b._score - a._score)
+    .slice(0, 12);
 }
 
-// ===== USER SEARCH =====
-async function handleSearch() {
-  const q = document.getElementById('searchInput').value.trim();
-  if (!q) return;
-  const grid = document.getElementById('searchNewsGrid');
-  grid.innerHTML = '<div class="card skeleton-card"></div><div class="card skeleton-card"></div><div class="card skeleton-card"></div>';
-  const articles = await fetchNews(q);
-  grid.innerHTML = '';
-  if (!articles.length) {
-    grid.innerHTML = `<div class="empty-state"><span class="empty-icon">🔍</span><p>「${q}」に関するニュースが見つかりませんでした。</p></div>`;
-    return;
-  }
-  articles.slice(0, 8).forEach((a, i) => grid.appendChild(createCard(a, false, i)));
+// キーワード検索：全ソースを横断して検索
+async function searchNews(query) {
+  const allSources = Object.values(RSS_SOURCES).flat();
+  const results = await Promise.all(
+    allSources.map(async src => {
+      const items = await fetchRSS(src.url);
+      return items.map(item => ({
+        title:       item.title || '',
+        description: (item.description || item.content || '').replace(/<[^>]+>/g,'').slice(0,160),
+        url:         item.link || item.url || '#',
+        urlToImage:  item.enclosure?.link || item.thumbnail || null,
+        source:      { name: src.name },
+        publishedAt: item.pubDate || new Date().toISOString(),
+        emoji:       src.emoji,
+      }));
+    })
+  );
+  const q = query.toLowerCase();
+  return results.flat()
+    .filter(a => a.title && (a.title.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)))
+    .slice(0, 10);
 }
 
-// ===== CREATE CARD =====
-function createCard(article, isAi, index) {
+// ===== CARD生成 =====
+function createCard(article, index = 0) {
   const card = document.createElement('div');
   card.className = 'card';
-  card.style.animationDelay = `${index * 0.06}s`;
-  const title    = article.title || 'タイトルなし';
-  const desc     = article.description || '';
-  const source   = article.source?.name || '';
-  const emoji    = article.emoji || '📰';
-  const category = article.category || 'IT / ニュース';
-  const date     = article.publishedAt ? new Date(article.publishedAt).toLocaleDateString('ja-JP') : '';
+  card.style.animationDelay = `${index * 0.055}s`;
+
+  const title   = article.title || 'タイトルなし';
+  const desc    = article.description || '';
+  const srcName = article.source?.name || '';
+  const emoji   = article.emoji || '📰';
+  const date    = article.publishedAt
+    ? new Date(article.publishedAt).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'})
+    : '';
+  const scores  = scoreArticle(title + ' ' + desc);
+  const tags    = getTags(scores);
+
   card.innerHTML = `
     ${article.urlToImage
-      ? `<img class="card-img" src="${article.urlToImage}" alt="" onerror="this.style.display='none'" loading="lazy"/>`
-      : `<div class="card-img-placeholder">${emoji}</div>`}
+      ? `<img class="card-img" src="${article.urlToImage}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="card-img-ph">${emoji}</div>`}
     <div class="card-body">
-      ${isAi ? `<div class="ai-badge">AI PICKUP</div>` : ''}
-      <div class="card-category">${category}</div>
+      <div class="card-meta">
+        <span class="card-source-badge">${srcName}</span>
+        <span class="card-date">${date}</span>
+      </div>
       <div class="card-title">${title}</div>
-      <div class="card-summary">${desc}</div>
+      <div class="card-summary">${desc || '記事の詳細はリンクよりご確認ください。'}</div>
       <div class="card-footer">
-        <span class="card-source">📰 ${source}${date ? ' · ' + date : ''}</span>
-        <span class="card-action">影響分析を見る →</span>
+        <div class="card-tags">${tags.map(t=>`<span class="card-tag">${t}</span>`).join('')}</div>
+        <span class="card-action">影響分析 →</span>
       </div>
     </div>`;
+
   card.addEventListener('click', () => openAnalysis(article));
   return card;
 }
 
-// ===== TODAY TOPICS =====
-async function generateTodayTopics() {
-  const chips = document.getElementById('topicChips');
-  try {
-    const prompt = `あなたはSES企業の営業責任者のアシスタントです。
-今日（${new Date().toLocaleDateString('ja-JP')}）の営業で話せる旬のトピックを3つ、日本語で生成してください。
-IT・AI・DX・金融・生保・製造業・電力などに関連するものを優先してください。
-JSONのみ返してください（他テキスト不要）:
-{"topics": ["トピック1（10字以内）", "トピック2（10字以内）", "トピック3（10字以内）"]}`;
-    const raw  = await callAI(prompt, 200);
-    const json = JSON.parse(raw.replace(/```json|```/g, '').trim());
-    chips.innerHTML = '';
-    (json.topics || []).forEach(t => {
-      const span = document.createElement('span');
-      span.className = 'chip'; span.textContent = t;
-      chips.appendChild(span);
-    });
-  } catch {
-    chips.innerHTML = `<span class="chip">金融DX加速</span><span class="chip">AIコード生成</span><span class="chip">SIer再編</span>`;
-  }
-}
-
-// ===== ANALYSIS MODAL =====
-async function openAnalysis(article) {
+// ===== 分析モーダル =====
+function openAnalysis(article) {
   const modal   = document.getElementById('analysisModal');
   const content = document.getElementById('analysisContent');
   modal.classList.remove('hidden');
-  content.innerHTML = `<div class="analysis-loading"><div class="spinner"></div><p>AI分析中... しばらくお待ちください</p></div>`;
 
-  const prompt = `あなたはSES（システムエンジニアリングサービス）企業の営業戦略アドバイザーです。
-以下のニュース記事を分析し、SES営業に役立つインサイトを提供してください。
+  content.innerHTML = `<div class="analysis-loading"><div class="spinner"></div><p>記事を分析中...</p></div>`;
 
-【記事タイトル】${article.title || ''}
-【記事概要】${article.description || ''}
-【出典】${article.source?.name || ''}
-
-以下の構造でJSONのみを返してください（他テキスト・マークダウン不要）:
-{
-  "summary": "記事の要約（3〜4文）",
-  "industry_impacts": [
-    {"name": "金融", "impact": "影響の説明（2文以内）"},
-    {"name": "生保", "impact": "影響の説明（2文以内）"},
-    {"name": "製造", "impact": "影響の説明（2文以内）"},
-    {"name": "電力・ガス", "impact": "影響の説明（2文以内）"}
-  ],
-  "it_impact": "IT業界・DX・AIへの影響（3〜4文）",
-  "ses_impact": "SES業界への影響（案件増減・システム刷新・AI導入・エンジニア需要の観点で3〜5文）",
-  "sales_talks": [
-    "営業トーク例1（20〜40字の自然な会話形式）",
-    "営業トーク例2（20〜40字の自然な会話形式）",
-    "営業トーク例3（20〜40字の自然な会話形式）"
-  ],
-  "future_prediction": "2〜3年後のIT業界・SIerへの影響予測（4〜5文）"
-}`;
-
-  try {
-    const raw  = await callAI(prompt, 1500);
-    const json = JSON.parse(raw.replace(/```json|```/g, '').trim());
-    renderAnalysis(content, article, json);
-  } catch (err) {
-    content.innerHTML = buildErrorHTML(err.message);
-  }
+  // 非同期っぽく見せるため少し遅延
+  setTimeout(() => {
+    const data = generateAnalysis(article);
+    renderAnalysis(content, article, data);
+  }, 600);
 }
 
-function renderAnalysis(container, article, data) {
+function renderAnalysis(container, article, d) {
+  const levelLabel = l => l === 'high' ? '<span class="impact-level impact-high">影響大</span>'
+                       : l === 'mid'  ? '<span class="impact-level impact-mid">影響中</span>'
+                       :                '<span class="impact-level impact-low">影響小</span>';
   container.innerHTML = `
     <div class="analysis-header">
       <div class="analysis-title">${article.title || ''}</div>
-      <div class="analysis-source">📰 ${article.source?.name || ''}</div>
+      <div class="analysis-source">📰 ${article.source?.name || ''} &nbsp;·&nbsp; <a href="${article.url}" target="_blank" rel="noopener" style="color:var(--accent)">記事を開く ↗</a></div>
     </div>
+
     <div class="analysis-section">
-      <div class="analysis-section-label"><span class="num">①</span> ニュース要約</div>
-      <p>${data.summary || ''}</p>
+      <div class="section-label"><span class="num">①</span>ニュース要約</div>
+      <p>${d.summary}</p>
     </div>
+
     <div class="analysis-section">
-      <div class="analysis-section-label"><span class="num">②</span> 業界への影響</div>
-      <div class="section-impact-grid">
-        ${(data.industry_impacts || []).map(i => `
+      <div class="section-label"><span class="num">②</span>業界への影響</div>
+      <div class="impact-grid">
+        ${d.industryImpacts.map(i => `
           <div class="industry-chip">
-            <div class="name">🏷 ${i.name}</div>
+            <div class="name">🏷 ${i.name} ${levelLabel(i.level)}</div>
             <div class="detail">${i.impact}</div>
           </div>`).join('')}
       </div>
     </div>
-    <div class="analysis-section">
-      <div class="analysis-section-label"><span class="num">③</span> IT業界への影響</div>
-      <p>${data.it_impact || ''}</p>
-    </div>
-    <div class="analysis-section">
-      <div class="analysis-section-label"><span class="num">④</span> SES業界への影響</div>
-      <p>${data.ses_impact || ''}</p>
-    </div>
-    <div class="analysis-section">
-      <div class="analysis-section-label"><span class="num">⑤</span> 営業トーク例</div>
-      ${(data.sales_talks || []).map(t => `<div class="talk-example">💬 ${t}</div>`).join('')}
-    </div>
-    <div class="analysis-section">
-      <div class="analysis-section-label"><span class="num">⑥</span> 将来予測（2〜3年後）</div>
-      <div class="future-box">🔮 ${data.future_prediction || ''}</div>
-    </div>`;
-}
 
-function buildErrorHTML(msg) {
-  let title = 'AI分析に失敗しました';
-  let detail = msg;
-  let fix = '';
+    <div class="analysis-section">
+      <div class="section-label"><span class="num">③</span>IT業界への影響</div>
+      <p>${d.itImpact}</p>
+    </div>
 
-  if (msg.includes('User not found') || msg.includes('401') || msg.includes('No auth')) {
-    title = '🔐 認証エラー：APIキーが無効です';
-    detail = 'OpenRouterのAPIキーが正しく認識されていません。';
-    fix = `
-      <div class="error-fix">
-        <strong>よくある原因と解決方法：</strong>
-        <ol>
-          <li>OpenRouterの <a href="https://openrouter.ai/settings/privacy" target="_blank">プライバシー設定</a> で<br>
-          「<b>Allow training on my prompts</b>」と「<b>Allow logging of my prompts</b>」を<b>両方オン</b>にしてください（無料モデルの必須条件）</li>
-          <li>APIキーをコピーし直して再設定してください（⚙ 設定ボタン）</li>
-          <li>OpenRouterで新しいAPIキーを発行し直すと解決することがあります</li>
-        </ol>
-      </div>`;
-  } else if (msg.includes('No endpoints') || msg.includes('data policy') || msg.includes('404')) {
-    title = '⚙️ プライバシー設定が必要です';
-    detail = '無料モデルを使うにはOpenRouterのプライバシー設定が必要です。';
-    fix = `
-      <div class="error-fix">
-        <strong>解決手順：</strong>
-        <ol>
-          <li><a href="https://openrouter.ai/settings/privacy" target="_blank">openrouter.ai/settings/privacy</a> を開く</li>
-          <li>「<b>Allow training on my prompts</b>」をオン</li>
-          <li>「<b>Allow logging of my prompts</b>」をオン</li>
-          <li>保存してからアプリに戻って再試行してください</li>
-        </ol>
-      </div>`;
-  } else if (msg.includes('429') || msg.includes('rate limit') || msg.includes('レート制限')) {
-    title = '⏳ リクエスト制限中です';
-    detail = '無料プランの1日の上限（50回）に達しました。';
-    fix = `<div class="error-fix">翌日（UTC 0時リセット）に再試行してください。<br>または <a href="https://openrouter.ai/credits" target="_blank">OpenRouterでクレジットを追加</a>すると1日1000回に増えます（最小$10）。</div>`;
-  }
+    <div class="analysis-section">
+      <div class="section-label"><span class="num">④</span>SES業界への影響</div>
+      <p>${d.sesImpact}</p>
+    </div>
 
-  return `
-    <div class="error-state">
-      <strong>${title}</strong><br>
-      <span style="font-size:13px;color:#666;margin-top:6px;display:block;">${detail}</span>
-      ${fix}
-      <div style="margin-top:14px;">
-        <button onclick="document.getElementById('analysisModal').classList.add('hidden'); document.getElementById('apiModal').classList.remove('hidden');"
-          style="background:#1d4ed8;color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
-          ⚙ 設定を開き直す
-        </button>
-      </div>
+    <div class="analysis-section">
+      <div class="section-label"><span class="num">⑤</span>営業トーク例</div>
+      ${d.salesTalks.map(t => `<div class="talk-box">💬 ${t}</div>`).join('')}
+    </div>
+
+    <div class="analysis-section">
+      <div class="section-label"><span class="num">⑥</span>将来予測（2〜3年後）</div>
+      <div class="future-box">🔮 ${d.futurePrediction}</div>
     </div>`;
 }
 
@@ -363,50 +389,93 @@ function closeAnalysisModal() {
   document.getElementById('analysisModal').classList.add('hidden');
 }
 
-// ===== OPENROUTER API =====
-// 完全無料・クレカ不要
-// 使用モデル: deepseek/deepseek-chat-v3-0324:free (高品質・無料)
-// フォールバック: meta-llama/llama-4-scout:free
-async function callAI(prompt, maxTokens = 1000) {
-  if (!STATE.openrouterKey) throw new Error('OpenRouter APIキーが設定されていません');
-
-  const models = [
-    'deepseek/deepseek-chat-v3-0324:free',
-    'meta-llama/llama-4-scout:free',
-    'google/gemma-3-27b-it:free',
+// ===== 今日の営業ネタ =====
+function generateTodayTopics() {
+  const today = new Date();
+  const seed  = today.getFullYear() * 10000 + (today.getMonth()+1) * 100 + today.getDate();
+  const pool  = [
+    '金融DX加速','生成AI実装','SIer再編','クラウド移行','スマート工場',
+    'セキュリティ強化','電力デジタル化','自動車OTA','保険システム刷新','AI人材不足',
+    'レガシー刷新','基幹システムPJ','エンジニア単価上昇','ゼロトラスト','データ活用',
   ];
-
-  let lastError;
-  for (const model of models) {
-    try {
-      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${STATE.openrouterKey}`,
-          'HTTP-Referer': window.location.href,
-          'X-Title': 'SES Intelligence Tool',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        // レート制限の場合は次モデルへ
-        if (resp.status === 429) { lastError = new Error('レート制限中'); continue; }
-        throw new Error(err.error?.message || `HTTP ${resp.status}`);
-      }
-
-      const data = await resp.json();
-      return data.choices?.[0]?.message?.content || '';
-    } catch (e) {
-      lastError = e;
-      if (!e.message.includes('レート制限')) throw e; // 429以外はすぐ投げる
-    }
-  }
-  throw lastError || new Error('全モデルが使用できませんでした');
+  // 日付ベースで3つ固定選択（毎日変わる）
+  const idx = seed % pool.length;
+  const picks = [pool[idx % pool.length], pool[(idx+5) % pool.length], pool[(idx+9) % pool.length]];
+  const chips = document.getElementById('topicChips');
+  chips.innerHTML = picks.map(p => `<span class="chip">${p}</span>`).join('');
 }
+
+// ===== 左パネル更新 =====
+let currentTab = 'it';
+async function loadLeftPanel(tabKey = currentTab) {
+  currentTab = tabKey;
+  const grid = document.getElementById('aiNewsGrid');
+  grid.innerHTML = '<div class="card skeleton-card"></div><div class="card skeleton-card"></div><div class="card skeleton-card"></div>';
+
+  const articles = await fetchTabNews(tabKey);
+  grid.innerHTML = '';
+
+  if (!articles.length) {
+    grid.innerHTML = `<div class="fetch-error">ニュースの取得に失敗しました。しばらく後に更新ボタンを押してください。</div>`;
+    return;
+  }
+  articles.forEach((a, i) => grid.appendChild(createCard(a, i)));
+}
+
+// ===== 検索 =====
+async function handleSearch() {
+  const q    = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  const grid = document.getElementById('searchNewsGrid');
+  grid.innerHTML = '<div class="card skeleton-card"></div><div class="card skeleton-card"></div><div class="card skeleton-card"></div>';
+
+  const articles = await searchNews(q);
+  grid.innerHTML = '';
+  if (!articles.length) {
+    grid.innerHTML = `<div class="empty-state"><span class="empty-icon">🔍</span><p>「${q}」に関するニュースが見つかりませんでした。<br>別のキーワードをお試しください。</p></div>`;
+    return;
+  }
+  articles.forEach((a, i) => grid.appendChild(createCard(a, i)));
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  // 日付
+  document.getElementById('headerDate').textContent =
+    new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+
+  generateTodayTopics();
+  loadLeftPanel('it');
+
+  // タブ
+  document.getElementById('sourceTabs').addEventListener('click', e => {
+    const btn = e.target.closest('.stab');
+    if (!btn) return;
+    document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadLeftPanel(btn.dataset.src);
+  });
+
+  // 検索
+  document.getElementById('searchBtn').addEventListener('click', handleSearch);
+  document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
+  document.querySelectorAll('.quick-tag').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('searchInput').value = btn.dataset.q;
+      handleSearch();
+    });
+  });
+
+  // 更新
+  document.getElementById('refreshLeft').addEventListener('click', () => loadLeftPanel(currentTab));
+  document.getElementById('refreshAll').addEventListener('click', () => {
+    loadLeftPanel(currentTab);
+    generateTodayTopics();
+  });
+
+  // モーダル
+  document.getElementById('closeAnalysis').addEventListener('click', closeAnalysisModal);
+  document.getElementById('analysisModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('analysisModal')) closeAnalysisModal();
+  });
+});
